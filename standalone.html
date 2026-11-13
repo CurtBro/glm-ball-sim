@@ -385,6 +385,7 @@ canvas {
       Pull from the ball at the center of the cube: stretch the line and release to launch (longer pull = more force).<br />
       Targets pop only on your 2nd or 3rd wall bounce (floor counts too). Miss and you lose the points of your last successful hit.<br />
       Grab the glowing light bulb above the cube (when the ball is not in play) and drag it around - it stays where you leave it. Reset restores it above the center.<br />
+      Ctrl+Up: bigger targets. Ctrl+Down: smaller targets. Either key replaces all three targets with new ones at the new size.<br />
       Drag empty space: orbit the camera. Scroll: zoom. After resting, the ball returns to the center.
     </p>
   </div>
@@ -684,6 +685,7 @@ const LIGHT_Y = HALF + CUBE * 0.1;
 const popFlashes = [];
 const game = {
   difficulty: 'medium',
+  sizeMult: 1,
   circles: [],
   bounceCount: 0,
   pathLength: 0,
@@ -739,7 +741,7 @@ function spawnCircles() {
     c.mesh.material.dispose();
   }
   game.circles = [];
-  const radius = R * DIFFICULTY_MULT[game.difficulty];
+  const radius = R * DIFFICULTY_MULT[game.difficulty] * game.sizeMult;
   const margin = radius + 0.4;
   const surfaces = [
     { axis: 'x', sign: -1 },
@@ -984,6 +986,28 @@ document.querySelectorAll('#difficulty button').forEach((btn) => {
     newGame();
     setStatus('Difficulty: ' + btn.textContent + '. New targets placed.');
   });
+});
+
+const RESIZE_STEP = 1.25;
+const SIZE_MULT_MIN = 0.5;
+const SIZE_MULT_MAX = 3;
+
+function resizeTargets(factor) {
+  game.sizeMult = THREE.MathUtils.clamp(game.sizeMult * factor, SIZE_MULT_MIN, SIZE_MULT_MAX);
+  spawnCircles();
+  updateScoreboard();
+  setStatus('Target size ' + game.sizeMult.toFixed(2) + 'x - three new targets placed.');
+}
+
+window.addEventListener('keydown', (event) => {
+  if (!event.ctrlKey && !event.metaKey) return;
+  if (event.key === 'ArrowUp') {
+    event.preventDefault();
+    resizeTargets(RESIZE_STEP);
+  } else if (event.key === 'ArrowDown') {
+    event.preventDefault();
+    resizeTargets(1 / RESIZE_STEP);
+  }
 });
 
 newGame();
