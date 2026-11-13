@@ -73,8 +73,34 @@ let restitution = 0.75;
 let aiming = false;
 const raycaster = new THREE.Raycaster();
 const mouse = new THREE.Vector2();
-const aimPlane = new THREE.Plane();
 const faceNormal = new THREE.Vector3();
+const cubeBox = new THREE.Box3(
+  new THREE.Vector3(-HALF, -HALF, -HALF),
+  new THREE.Vector3(HALF, HALF, HALF)
+);
+const cubeCenter = cubeBox.getCenter(new THREE.Vector3());
+
+function rayBoxTarget(ray) {
+  let tmin = -Infinity;
+  let tmax = Infinity;
+  for (const axis of ['x', 'y', 'z']) {
+    const inv = 1 / ray.direction[axis];
+    let t1 = (cubeBox.min[axis] - ray.origin[axis]) * inv;
+    let t2 = (cubeBox.max[axis] - ray.origin[axis]) * inv;
+    if (t1 > t2) {
+      const tmp = t1;
+      t1 = t2;
+      t2 = tmp;
+    }
+    tmin = Math.max(tmin, t1);
+    tmax = Math.min(tmax, t2);
+  }
+  if (tmax >= tmin && tmax > 0) {
+    return ray.origin.clone().addScaledVector(ray.direction, tmax);
+  }
+  const p = ray.closestPointToPoint(cubeCenter, new THREE.Vector3());
+  return p.clamp(cubeBox.min, cubeBox.max);
+}
 const startPoint = new THREE.Vector3();
 const aimPoint = new THREE.Vector3();
 
@@ -129,23 +155,23 @@ renderer.domElement.addEventListener('pointerdown', (event) => {
   controls.enabled = false;
   aiming = true;
   faceNormal.copy(hits[0].face.normal).transformDirection(walls.matrixWorld);
-  startPoint.copy(hits[0].point);
-  aimPoint.copy(startPoint);
-  aimPlane.setFromNormalAndCoplanarPoint(faceNormal, startPoint);
-  pos.copy(startPoint).addScaledVector(faceNormal, -R);
+  pos.copy(hits[0].point).addScaledVector(faceNormal, -R);
+  startPoint.copy(pos);
+  aimPoint.copy(pos);
   ball.position.copy(pos);
   ball.visible = true;
   launched = false;
   atRest = false;
   updateAimLine();
-  setStatus('Stretch the line, then release to launch.');
+  setStatus('Move to aim into the cube, then release to launch.');
 });
 
 window.addEventListener('pointermove', (event) => {
   if (!aiming) return;
   updateMouse(event);
   raycaster.setFromCamera(mouse, camera);
-  if (!raycaster.ray.intersectPlane(aimPlane, aimPoint)) return;
+  const target = rayBoxTarget(raycaster.ray);
+  aimPoint.copy(target);
   updateAimLine();
 });
 
@@ -159,7 +185,7 @@ window.addEventListener('pointerup', () => {
   if (length < 0.15) {
     vel.set(0, 0, 0);
   } else {
-    const speed = Math.min(length * 4, MAX_SPEED);
+    const speed = Math.min(length * 3, MAX_SPEED);
     vel.copy(drag.normalize().multiplyScalar(speed));
   }
   launched = true;
