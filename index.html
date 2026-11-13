@@ -15,23 +15,27 @@
   </div>
   <div id="ui">
     <h1>Bouncing Ball in a Cube</h1>
-    <p id="status">Drag on any wall to place the ball and aim.</p>
+    <p id="status">Pull from the ball at the center, then release to launch.</p>
     <label>
-      <span>Bounciness <b id="bounciness-value">75%</b></span>
-      <input type="range" id="bounciness" min="0" max="100" value="75" />
+      <span>Bounciness <b id="bounciness-value">90%</b></span>
+      <input type="range" id="bounciness" min="0" max="100" value="90" />
     </label>
     <label>
-      <span>Wall transparency <b id="transparency-value">85%</b></span>
-      <input type="range" id="transparency" min="0" max="100" value="85" />
+      <span>Wall transparency <b id="transparency-value">50%</b></span>
+      <input type="range" id="transparency" min="0" max="100" value="50" />
     </label>
     <label>
-      <span>Ball color <b id="ball-color-value">#ff7a1a</b></span>
-      <input type="range" id="ball-color" min="0" max="360" value="24" class="color-slider" />
+      <span>Ball color <b id="ball-color-value">#0008ff</b></span>
+      <input type="range" id="ball-color" min="0" max="360" value="238" class="color-slider" />
+    </label>
+    <label>
+      <span>Volume <b id="volume-value">70%</b></span>
+      <input type="range" id="volume" min="0" max="100" value="70" />
     </label>
     <button id="reset">Reset ball</button>
     <p class="hint">
-      Drag on a wall: place the ball, then move to aim into the cube — the ball flies toward where you point (line length = force).<br />
-      Drag empty space: orbit the camera. Scroll: zoom.
+      Pull from the ball at the center of the cube: stretch the line and release to launch (longer pull = more force).<br />
+      Drag empty space: orbit the camera. Scroll: zoom. After resting, the ball returns to the center.
     </p>
   </div>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>

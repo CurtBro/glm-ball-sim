@@ -203,23 +203,27 @@ canvas {
   </div>
   <div id="ui">
     <h1>Bouncing Ball in a Cube</h1>
-    <p id="status">Drag on any wall to place the ball and aim.</p>
+    <p id="status">Pull from the ball at the center, then release to launch.</p>
     <label>
-      <span>Bounciness <b id="bounciness-value">75%</b></span>
-      <input type="range" id="bounciness" min="0" max="100" value="75" />
+      <span>Bounciness <b id="bounciness-value">90%</b></span>
+      <input type="range" id="bounciness" min="0" max="100" value="90" />
     </label>
     <label>
-      <span>Wall transparency <b id="transparency-value">85%</b></span>
-      <input type="range" id="transparency" min="0" max="100" value="85" />
+      <span>Wall transparency <b id="transparency-value">50%</b></span>
+      <input type="range" id="transparency" min="0" max="100" value="50" />
     </label>
     <label>
-      <span>Ball color <b id="ball-color-value">#ff7a1a</b></span>
-      <input type="range" id="ball-color" min="0" max="360" value="24" class="color-slider" />
+      <span>Ball color <b id="ball-color-value">#0008ff</b></span>
+      <input type="range" id="ball-color" min="0" max="360" value="238" class="color-slider" />
+    </label>
+    <label>
+      <span>Volume <b id="volume-value">70%</b></span>
+      <input type="range" id="volume" min="0" max="100" value="70" />
     </label>
     <button id="reset">Reset ball</button>
     <p class="hint">
-      Drag on a wall: place the ball, then move to aim into the cube — the ball flies toward where you point (line length = force).<br />
-      Drag empty space: orbit the camera. Scroll: zoom.
+      Pull from the ball at the center of the cube: stretch the line and release to launch (longer pull = more force).<br />
+      Drag empty space: orbit the camera. Scroll: zoom. After resting, the ball returns to the center.
     </p>
   </div>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -307,11 +311,11 @@ scene.add(edges);
 
 const ball = new THREE.Mesh(
   new THREE.SphereGeometry(R, 48, 32),
-  new THREE.MeshStandardMaterial({ color: 0xff7a1a, roughness: 0.35, metalness: 0.1 })
+  new THREE.MeshStandardMaterial({ color: 0x0008ff, roughness: 0.35, metalness: 0.1 })
 );
-ball.visible = false;
+ball.visible = true;
 scene.add(ball);
-const baseBallColor = new THREE.Color(0xff7a1a);
+const baseBallColor = new THREE.Color(0x0008ff);
 
 const aimLineGeo = new THREE.CylinderGeometry(0.07, 0.07, 1, 12, 1, true);
 aimLineGeo.translate(0, 0.5, 0);
@@ -323,23 +327,27 @@ aimLine.visible = false;
 scene.add(aimLine);
 
 const pos = new THREE.Vector3();
+pos.set(0, 0, 0);
+ball.position.copy(pos);
 const vel = new THREE.Vector3();
-const savedPos = new THREE.Vector3();
-const savedVel = new THREE.Vector3();
 let launched = false;
 let atRest = false;
-let savedLaunched = false;
-let savedAtRest = false;
-let restitution = 0.75;
+let restAt = 0;
+let restitution = 0.9;
 
 let aiming = false;
 const raycaster = new THREE.Raycaster();
 const mouse = new THREE.Vector2();
-const faceNormal = new THREE.Vector3();
 const cubeBox = new THREE.Box3(
   new THREE.Vector3(-HALF, -HALF, -HALF),
   new THREE.Vector3(HALF, HALF, HALF)
 );
+
+const grabSphere = new THREE.Mesh(
+  new THREE.SphereGeometry(R * 2.5, 12, 8),
+  new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false })
+);
+scene.add(grabSphere);
 
 function rayBoxTarget(ray) {
   let tmin = -Infinity;
@@ -393,8 +401,57 @@ const legendFloor = document.getElementById('legend-floor');
 const legendX = document.getElementById('legend-x');
 const legendY = document.getElementById('legend-y');
 const statusEl = document.getElementById('status');
+const volumeSlider = document.getElementById('volume');
+const volumeValue = document.getElementById('volume-value');
 
 const BALL_MASS = 0.45;
+
+let audioCtx = null;
+let masterGain = null;
+let lastSoundTime = 0;
+
+function ensureAudio() {
+  if (!audioCtx) {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return;
+    audioCtx = new AC();
+    masterGain = audioCtx.createGain();
+    masterGain.connect(audioCtx.destination);
+    updateVolume();
+  }
+  if (audioCtx.state === 'suspended') {
+    audioCtx.resume();
+  }
+}
+
+function updateVolume() {
+  volumeValue.textContent = volumeSlider.value + '%';
+  if (masterGain) {
+    const v = volumeSlider.value / 100;
+    masterGain.gain.value = v * v;
+  }
+}
+
+function playDook(impactSpeed) {
+  if (!audioCtx || !masterGain || Number(volumeSlider.value) === 0) return;
+  const now = performance.now();
+  if (now - lastSoundTime < 30) return;
+  const vol = Math.min(1, impactSpeed / 30);
+  if (vol < 0.03) return;
+  lastSoundTime = now;
+  const t = audioCtx.currentTime;
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  osc.type = 'triangle';
+  osc.frequency.setValueAtTime(150 + 80 * vol, t);
+  osc.frequency.exponentialRampToValueAtTime(65, t + 0.09);
+  gain.gain.setValueAtTime(0.6 * vol, t);
+  gain.gain.exponentialRampToValueAtTime(0.001, t + 0.13);
+  osc.connect(gain);
+  gain.connect(masterGain);
+  osc.start(t);
+  osc.stop(t + 0.14);
+}
 
 function updateBounciness() {
   restitution = bouncinessSlider.value / 100;
@@ -419,20 +476,26 @@ function updateBallColor() {
 bouncinessSlider.addEventListener('input', updateBounciness);
 transparencySlider.addEventListener('input', updateTransparency);
 ballColorSlider.addEventListener('input', updateBallColor);
+volumeSlider.addEventListener('input', updateVolume);
 updateBounciness();
 updateTransparency();
 updateBallColor();
+updateVolume();
 
 document.getElementById('reset').addEventListener('click', resetBall);
 
 function resetBall() {
   launched = false;
   atRest = false;
-  ball.visible = false;
+  restAt = 0;
+  pos.set(0, 0, 0);
+  vel.set(0, 0, 0);
+  ball.position.copy(pos);
+  ball.visible = true;
   aimLine.visible = false;
   crosshair.visible = false;
   setLegendIdle();
-  setStatus('Drag on any wall to place the ball and aim.');
+  setStatus('Ball at the center. Pull from it to launch.');
 }
 
 function setLegendIdle() {
@@ -472,27 +535,25 @@ function updateMouse(event) {
 
 renderer.domElement.addEventListener('pointerdown', (event) => {
   if (event.button !== 0) return;
+  ensureAudio();
   updateMouse(event);
   raycaster.setFromCamera(mouse, camera);
-  const hits = raycaster.intersectObjects(wallMeshes);
-  if (!hits.length) return;
+  if (!raycaster.intersectObject(grabSphere).length) return;
   controls.enabled = false;
   aiming = true;
-  savedLaunched = launched;
-  savedAtRest = atRest;
-  savedPos.copy(pos);
-  savedVel.copy(vel);
-  faceNormal.copy(hits[0].face.normal).transformDirection(hits[0].object.matrixWorld);
-  if (faceNormal.dot(hits[0].point) > 0) faceNormal.negate();
-  pos.copy(hits[0].point).addScaledVector(faceNormal, R);
+  pos.set(0, 0, 0);
+  vel.set(0, 0, 0);
   startPoint.copy(pos);
   aimPoint.copy(pos);
   ball.position.copy(pos);
   ball.visible = true;
   launched = false;
   atRest = false;
+  restAt = 0;
   updateAimLine();
-  setStatus('Move to aim into the cube, then release to launch.');
+  updateLegend();
+  updateCrosshair();
+  setStatus('Pull from the ball, then release to launch.');
 });
 
 window.addEventListener('pointermove', (event) => {
@@ -520,18 +581,8 @@ window.addEventListener('pointerup', () => {
   const drag = aimPoint.clone().sub(startPoint);
   const length = drag.length();
   if (length < 0.15) {
-    if (savedLaunched && !savedAtRest) {
-      pos.copy(savedPos);
-      vel.copy(savedVel);
-      ball.position.copy(pos);
-      launched = true;
-      atRest = false;
-      setStatus('Click ignored - ball keeps its flight. Drag to re-aim.');
-    } else {
-      vel.set(0, 0, 0);
-      launched = true;
-      setStatus('Ball placed.');
-    }
+    launched = false;
+    setStatus('Ball ready at the center. Pull to launch.');
   } else {
     const speed = Math.min(length * 3, MAX_SPEED);
     vel.copy(drag.normalize().multiplyScalar(speed));
@@ -566,12 +617,14 @@ function step(h) {
     if (pos[axis] > lim) {
       pos[axis] = lim;
       if (vel[axis] > 0) {
+        playDook(vel[axis]);
         vel[axis] = -vel[axis] * restitution;
         bounced = true;
       }
     } else if (pos[axis] < -lim) {
       pos[axis] = -lim;
       if (vel[axis] < 0) {
+        playDook(-vel[axis]);
         vel[axis] = -vel[axis] * restitution;
         bounced = true;
       }
@@ -694,6 +747,20 @@ function animate(now) {
     for (let i = 0; i < substeps; i++) {
       if (atRest) break;
       step(h);
+    }
+  }
+  grabSphere.position.copy(ball.position);
+  if (atRest) {
+    if (!restAt) {
+      restAt = now;
+    } else if (now - restAt > 1000) {
+      atRest = false;
+      launched = false;
+      restAt = 0;
+      pos.set(0, 0, 0);
+      vel.set(0, 0, 0);
+      ball.position.copy(pos);
+      setStatus('Ball ready at the center. Pull to launch.');
     }
   }
   const dimTarget = wallDimmingFactor();
