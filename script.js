@@ -274,12 +274,12 @@ function playDook(impactSpeed) {
 }
 
 const LB_KEY = 'glm-ball-sim-leaderboard';
-const DIFFICULTY_MULT = { easy: 3, medium: 2, hard: 1 };
+const DIFFICULTY_MULT = { easy: 3, medium: 2, hard: 2 };
 const LIGHT_Y = HALF + CUBE * 0.1;
 const popFlashes = [];
 const game = {
   difficulty: 'medium',
-  sizeMult: 1,
+  sizeMult: 2.44,
   circles: [],
   bounceCount: 0,
   pathLength: 0,
