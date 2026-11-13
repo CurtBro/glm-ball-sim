@@ -246,6 +246,8 @@ camera.position.set(13, 9, 15);
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.VSMShadowMap;
 document.body.appendChild(renderer.domElement);
 
 const controls = new THREE.OrbitControls(camera, renderer.domElement);
@@ -255,12 +257,36 @@ controls.minDistance = 6;
 controls.maxDistance = 60;
 
 scene.add(new THREE.AmbientLight(0xffffff, 0.55));
-const keyLight = new THREE.DirectionalLight(0xffffff, 0.9);
+const keyLight = new THREE.DirectionalLight(0xffffff, 0.55);
 keyLight.position.set(10, 18, 8);
 scene.add(keyLight);
 const fillLight = new THREE.DirectionalLight(0x88aaff, 0.35);
 fillLight.position.set(-8, -6, -10);
 scene.add(fillLight);
+
+const sunLight = new THREE.DirectionalLight(0xffffff, 0.9);
+sunLight.position.set(0, HALF + CUBE * 0.1, 0);
+sunLight.castShadow = true;
+sunLight.shadow.mapSize.set(1024, 1024);
+sunLight.shadow.camera.left = -7;
+sunLight.shadow.camera.right = 7;
+sunLight.shadow.camera.top = 7;
+sunLight.shadow.camera.bottom = -7;
+sunLight.shadow.camera.near = 0.5;
+sunLight.shadow.camera.far = 30;
+sunLight.shadow.camera.updateProjectionMatrix();
+sunLight.shadow.radius = 12;
+sunLight.shadow.blurSamples = 16;
+sunLight.shadow.bias = -0.0005;
+scene.add(sunLight);
+scene.add(sunLight.target);
+
+const lightMarker = new THREE.Mesh(
+  new THREE.SphereGeometry(0.15, 12, 8),
+  new THREE.MeshBasicMaterial({ color: 0xfff7cc })
+);
+lightMarker.position.copy(sunLight.position);
+scene.add(lightMarker);
 
 const clearMat = new THREE.MeshPhysicalMaterial({
   color: 0x9fd8ff,
@@ -302,6 +328,7 @@ const wallMeshes = [
   makeWall(translucidMat, [0, 0, -HALF], [0, 0, 0]),
   makeWall(floorMat, [0, -HALF, 0], [-Math.PI / 2, 0, 0])
 ];
+wallMeshes[5].receiveShadow = true;
 
 const edges = new THREE.LineSegments(
   new THREE.EdgesGeometry(new THREE.BoxGeometry(CUBE, CUBE, CUBE)),
@@ -309,10 +336,31 @@ const edges = new THREE.LineSegments(
 );
 scene.add(edges);
 
+function makeBallTexture() {
+  const canvas = document.createElement('canvas');
+  canvas.width = 256;
+  canvas.height = 128;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = 'rgba(25, 25, 25, 0.9)';
+  ctx.fillRect(0, 60, canvas.width, 8);
+  for (let i = 0; i < 8; i++) {
+    ctx.fillRect(i * 32 + 14, 18, 5, 92);
+  }
+  return new THREE.CanvasTexture(canvas);
+}
+
 const ball = new THREE.Mesh(
   new THREE.SphereGeometry(R, 48, 32),
-  new THREE.MeshStandardMaterial({ color: 0x0008ff, roughness: 0.35, metalness: 0.1 })
+  new THREE.MeshStandardMaterial({
+    color: 0x0008ff,
+    map: makeBallTexture(),
+    roughness: 0.35,
+    metalness: 0.1
+  })
 );
+ball.castShadow = true;
 ball.visible = true;
 scene.add(ball);
 const baseBallColor = new THREE.Color(0x0008ff);
@@ -735,6 +783,7 @@ function updateCrosshair() {
 }
 
 let dimFactor = 1;
+const rollAxis = new THREE.Vector3();
 
 let last = performance.now();
 function animate(now) {
@@ -747,6 +796,13 @@ function animate(now) {
     for (let i = 0; i < substeps; i++) {
       if (atRest) break;
       step(h);
+    }
+  }
+  if (launched && !atRest && pos.y <= -HALF + R + 0.05) {
+    const horiz = Math.hypot(vel.x, vel.z);
+    if (horiz > 0.05) {
+      rollAxis.set(vel.z, 0, -vel.x).normalize();
+      ball.rotateOnWorldAxis(rollAxis, (horiz * dt) / R);
     }
   }
   grabSphere.position.copy(ball.position);
