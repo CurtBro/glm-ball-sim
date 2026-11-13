@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Bouncing Ball in a Cube</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div id="ui">
+    <h1>Bouncing Ball in a Cube</h1>
+    <p id="status">Drag on any wall to place the ball and aim.</p>
+    <label>
+      <span>Bounciness <b id="bounciness-value">75%</b></span>
+      <input type="range" id="bounciness" min="0" max="100" value="75" />
+    </label>
+    <label>
+      <span>Wall transparency <b id="transparency-value">85%</b></span>
+      <input type="range" id="transparency" min="0" max="100" value="85" />
+    </label>
+    <button id="reset">Reset ball</button>
+    <p class="hint">
+      Drag on a wall: place the ball and stretch an aim line (longer line = more force).<br />
+      Drag empty space: orbit the camera. Scroll: zoom.
+    </p>
+  </div>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+  <script src="script.js"></script>
+</body>
+</html>
