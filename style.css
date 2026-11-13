@@ -181,8 +181,14 @@ canvas {
   background: rgba(95, 178, 255, 0.3);
 }
 
-#difficulty {
+#difficulty,
+#target-size {
   margin-bottom: 12px;
+}
+
+#target-size-value {
+  color: #9fd8ff;
+  font-weight: 600;
 }
 
 .diff-label {

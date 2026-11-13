@@ -590,24 +590,18 @@ document.querySelectorAll('#difficulty button').forEach((btn) => {
 const RESIZE_STEP = 1.25;
 const SIZE_MULT_MIN = 0.5;
 const SIZE_MULT_MAX = 3;
+const targetSizeValue = document.getElementById('target-size-value');
+
+document.getElementById('size-bigger').addEventListener('click', () => resizeTargets(RESIZE_STEP));
+document.getElementById('size-smaller').addEventListener('click', () => resizeTargets(1 / RESIZE_STEP));
 
 function resizeTargets(factor) {
   game.sizeMult = THREE.MathUtils.clamp(game.sizeMult * factor, SIZE_MULT_MIN, SIZE_MULT_MAX);
+  targetSizeValue.textContent = game.sizeMult.toFixed(2) + 'x';
   spawnCircles();
   updateScoreboard();
   setStatus('Target size ' + game.sizeMult.toFixed(2) + 'x - three new targets placed.');
 }
-
-window.addEventListener('keydown', (event) => {
-  if (event.ctrlKey || event.metaKey || event.altKey) return;
-  const tag = event.target && event.target.tagName;
-  if (tag === 'INPUT' || tag === 'TEXTAREA') return;
-  if (event.key === ']') {
-    resizeTargets(RESIZE_STEP);
-  } else if (event.key === '[') {
-    resizeTargets(1 / RESIZE_STEP);
-  }
-});
 
 newGame();
 renderLeaderboard();

@@ -188,8 +188,14 @@ canvas {
   background: rgba(95, 178, 255, 0.3);
 }
 
-#difficulty {
+#difficulty,
+#target-size {
   margin-bottom: 12px;
+}
+
+#target-size-value {
+  color: #9fd8ff;
+  font-weight: 600;
 }
 
 .diff-label {
@@ -380,12 +386,19 @@ canvas {
         <button data-diff="hard">Hard</button>
       </div>
     </div>
+    <div id="target-size">
+      <span class="diff-label">Target size <b id="target-size-value">1.00x</b></span>
+      <div class="diff-buttons">
+        <button id="size-bigger">Bigger</button>
+        <button id="size-smaller">Smaller</button>
+      </div>
+    </div>
     <button id="reset">Reset ball &amp; light</button>
     <p class="hint">
       Pull from the ball at the center of the cube: stretch the line and release to launch (longer pull = more force).<br />
       Targets pop only on your 2nd or 3rd wall bounce (floor counts too). Miss and you lose the points of your last successful hit.<br />
       Grab the glowing light bulb above the cube (when the ball is not in play) and drag it around - it stays where you leave it. Reset restores it above the center.<br />
-      Press ] for bigger targets or [ for smaller ones - each press replaces all three targets at the new size.<br />
+      Use the Bigger / Smaller buttons to resize the targets - each press replaces all three targets at the new size.<br />
       Click (don't drag) anywhere after the ball's 2nd wall bounce to recall it to the center instantly.<br />
       Drag empty space: orbit the camera. Scroll: zoom. After resting, the ball returns to the center.
     </p>
@@ -997,24 +1010,18 @@ document.querySelectorAll('#difficulty button').forEach((btn) => {
 const RESIZE_STEP = 1.25;
 const SIZE_MULT_MIN = 0.5;
 const SIZE_MULT_MAX = 3;
+const targetSizeValue = document.getElementById('target-size-value');
+
+document.getElementById('size-bigger').addEventListener('click', () => resizeTargets(RESIZE_STEP));
+document.getElementById('size-smaller').addEventListener('click', () => resizeTargets(1 / RESIZE_STEP));
 
 function resizeTargets(factor) {
   game.sizeMult = THREE.MathUtils.clamp(game.sizeMult * factor, SIZE_MULT_MIN, SIZE_MULT_MAX);
+  targetSizeValue.textContent = game.sizeMult.toFixed(2) + 'x';
   spawnCircles();
   updateScoreboard();
   setStatus('Target size ' + game.sizeMult.toFixed(2) + 'x - three new targets placed.');
 }
-
-window.addEventListener('keydown', (event) => {
-  if (event.ctrlKey || event.metaKey || event.altKey) return;
-  const tag = event.target && event.target.tagName;
-  if (tag === 'INPUT' || tag === 'TEXTAREA') return;
-  if (event.key === ']') {
-    resizeTargets(RESIZE_STEP);
-  } else if (event.key === '[') {
-    resizeTargets(1 / RESIZE_STEP);
-  }
-});
 
 newGame();
 renderLeaderboard();
