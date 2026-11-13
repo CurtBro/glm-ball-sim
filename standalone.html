@@ -387,7 +387,7 @@ canvas {
       </div>
     </div>
     <div id="target-size">
-      <span class="diff-label">Target size <b id="target-size-value">1.00x</b></span>
+      <span class="diff-label">Target size <b id="target-size-value">2.44x</b></span>
       <div class="diff-buttons">
         <button id="size-bigger">Bigger</button>
         <button id="size-smaller">Smaller</button>
@@ -694,12 +694,12 @@ function playDook(impactSpeed) {
 }
 
 const LB_KEY = 'glm-ball-sim-leaderboard';
-const DIFFICULTY_MULT = { easy: 3, medium: 2, hard: 1 };
+const DIFFICULTY_MULT = { easy: 3, medium: 2, hard: 2 };
 const LIGHT_Y = HALF + CUBE * 0.1;
 const popFlashes = [];
 const game = {
   difficulty: 'medium',
-  sizeMult: 1,
+  sizeMult: 2.44,
   circles: [],
   bounceCount: 0,
   pathLength: 0,
