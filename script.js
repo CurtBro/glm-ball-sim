@@ -279,6 +279,7 @@ const LIGHT_Y = HALF + CUBE * 0.1;
 const popFlashes = [];
 const game = {
   difficulty: 'medium',
+  sizeMult: 1,
   circles: [],
   bounceCount: 0,
   pathLength: 0,
@@ -334,7 +335,7 @@ function spawnCircles() {
     c.mesh.material.dispose();
   }
   game.circles = [];
-  const radius = R * DIFFICULTY_MULT[game.difficulty];
+  const radius = R * DIFFICULTY_MULT[game.difficulty] * game.sizeMult;
   const margin = radius + 0.4;
   const surfaces = [
     { axis: 'x', sign: -1 },
@@ -579,6 +580,28 @@ document.querySelectorAll('#difficulty button').forEach((btn) => {
     newGame();
     setStatus('Difficulty: ' + btn.textContent + '. New targets placed.');
   });
+});
+
+const RESIZE_STEP = 1.25;
+const SIZE_MULT_MIN = 0.5;
+const SIZE_MULT_MAX = 3;
+
+function resizeTargets(factor) {
+  game.sizeMult = THREE.MathUtils.clamp(game.sizeMult * factor, SIZE_MULT_MIN, SIZE_MULT_MAX);
+  spawnCircles();
+  updateScoreboard();
+  setStatus('Target size ' + game.sizeMult.toFixed(2) + 'x - three new targets placed.');
+}
+
+window.addEventListener('keydown', (event) => {
+  if (!event.ctrlKey && !event.metaKey) return;
+  if (event.key === 'ArrowUp') {
+    event.preventDefault();
+    resizeTargets(RESIZE_STEP);
+  } else if (event.key === 'ArrowDown') {
+    event.preventDefault();
+    resizeTargets(1 / RESIZE_STEP);
+  }
 });
 
 newGame();
