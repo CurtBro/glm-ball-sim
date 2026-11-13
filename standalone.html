@@ -239,6 +239,7 @@ const ball = new THREE.Mesh(
 );
 ball.visible = false;
 scene.add(ball);
+const baseBallColor = new THREE.Color(0xff7a1a);
 
 const aimLineGeo = new THREE.BufferGeometry().setFromPoints([
   new THREE.Vector3(),
@@ -309,7 +310,7 @@ function updateTransparency() {
 
 function updateBallColor() {
   const color = new THREE.Color().setHSL(ballColorSlider.value / 360, 1, 0.5);
-  ball.material.color.copy(color);
+  baseBallColor.copy(color);
   const hex = '#' + color.getHexString();
   ballColorSlider.style.setProperty('--thumb-color', hex);
   ballColorValue.textContent = hex;
@@ -436,6 +437,42 @@ function step(h) {
   ball.position.copy(pos);
 }
 
+const camToBall = new THREE.Vector3();
+const crossPoint = new THREE.Vector3();
+const wallPlanes = [];
+for (const axis of ['x', 'y', 'z']) {
+  for (const sign of [-1, 1]) {
+    wallPlanes.push({ axis, value: sign * HALF });
+  }
+}
+
+function wallDimmingFactor() {
+  if (!ball.visible) return 1;
+  camToBall.subVectors(ball.position, camera.position);
+  const distBall = camToBall.length();
+  if (distBall < 1e-6) return 1;
+  let factor = 1;
+  for (const plane of wallPlanes) {
+    const dCam = camera.position[plane.axis];
+    const dBall = ball.position[plane.axis];
+    if ((dCam - plane.value) * (dBall - plane.value) >= 0) continue;
+    const t = (plane.value - dCam) / (dBall - dCam);
+    crossPoint.copy(camera.position).addScaledVector(camToBall, t);
+    let insideFace = true;
+    for (const other of ['x', 'y', 'z']) {
+      if (other === plane.axis) continue;
+      if (Math.abs(crossPoint[other]) > HALF) {
+        insideFace = false;
+        break;
+      }
+    }
+    if (insideFace) {
+      factor = Math.min(factor, 1 - wallMat.opacity);
+    }
+  }
+  return factor;
+}
+
 let last = performance.now();
 function animate(now) {
   requestAnimationFrame(animate);
@@ -449,6 +486,7 @@ function animate(now) {
       step(h);
     }
   }
+  ball.material.color.copy(baseBallColor).multiplyScalar(wallDimmingFactor());
   controls.update();
   renderer.render(scene, camera);
 }
