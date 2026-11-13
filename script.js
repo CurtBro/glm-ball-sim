@@ -31,7 +31,16 @@ const fillLight = new THREE.DirectionalLight(0x88aaff, 0.35);
 fillLight.position.set(-8, -6, -10);
 scene.add(fillLight);
 
-const wallMat = new THREE.MeshPhysicalMaterial({
+const clearMat = new THREE.MeshPhysicalMaterial({
+  color: 0x9fd8ff,
+  transparent: true,
+  opacity: 0,
+  roughness: 0.05,
+  metalness: 0,
+  side: THREE.DoubleSide,
+  depthWrite: false
+});
+const translucidMat = new THREE.MeshPhysicalMaterial({
   color: 0x9fd8ff,
   transparent: true,
   opacity: 0.15,
@@ -40,11 +49,31 @@ const wallMat = new THREE.MeshPhysicalMaterial({
   side: THREE.DoubleSide,
   depthWrite: true
 });
-const walls = new THREE.Mesh(new THREE.BoxGeometry(CUBE, CUBE, CUBE), wallMat);
-scene.add(walls);
+const floorMat = new THREE.MeshStandardMaterial({
+  color: 0x2a7a8f,
+  roughness: 0.6,
+  metalness: 0
+});
+
+const wallGeo = new THREE.PlaneGeometry(CUBE, CUBE);
+function makeWall(material, position, rotation) {
+  const mesh = new THREE.Mesh(wallGeo, material);
+  mesh.position.set(position[0], position[1], position[2]);
+  mesh.rotation.set(rotation[0], rotation[1], rotation[2]);
+  scene.add(mesh);
+  return mesh;
+}
+const wallMeshes = [
+  makeWall(clearMat, [0, HALF, 0], [Math.PI / 2, 0, 0]),
+  makeWall(clearMat, [0, 0, HALF], [0, Math.PI, 0]),
+  makeWall(translucidMat, [-HALF, 0, 0], [0, Math.PI / 2, 0]),
+  makeWall(translucidMat, [HALF, 0, 0], [0, -Math.PI / 2, 0]),
+  makeWall(translucidMat, [0, 0, -HALF], [0, 0, 0]),
+  makeWall(floorMat, [0, -HALF, 0], [-Math.PI / 2, 0, 0])
+];
 
 const edges = new THREE.LineSegments(
-  new THREE.EdgesGeometry(walls.geometry),
+  new THREE.EdgesGeometry(new THREE.BoxGeometry(CUBE, CUBE, CUBE)),
   new THREE.LineBasicMaterial({ color: 0x5fb2ff, transparent: true, opacity: 0.55 })
 );
 scene.add(edges);
@@ -79,7 +108,6 @@ const cubeBox = new THREE.Box3(
   new THREE.Vector3(-HALF, -HALF, -HALF),
   new THREE.Vector3(HALF, HALF, HALF)
 );
-const cubeCenter = cubeBox.getCenter(new THREE.Vector3());
 
 function rayBoxTarget(ray) {
   let tmin = -Infinity;
@@ -99,8 +127,26 @@ function rayBoxTarget(ray) {
   if (tmax >= tmin && tmax > 0) {
     return ray.origin.clone().addScaledVector(ray.direction, tmax);
   }
-  const p = ray.closestPointToPoint(cubeCenter, new THREE.Vector3());
-  return p.clamp(cubeBox.min, cubeBox.max);
+  return null;
+}
+
+const aimDirection = new THREE.Vector3();
+const projectedBall = new THREE.Vector3();
+
+function pixelsPerWorldUnit() {
+  const dist = camera.position.distanceTo(startPoint);
+  const fovRad = (camera.fov * Math.PI) / 180;
+  return renderer.domElement.clientHeight / (2 * dist * Math.tan(fovRad / 2));
+}
+
+function cursorPixelsFromBall() {
+  projectedBall.copy(startPoint).project(camera);
+  const rect = renderer.domElement.getBoundingClientRect();
+  const bx = ((projectedBall.x + 1) / 2) * rect.width;
+  const by = ((1 - projectedBall.y) / 2) * rect.height;
+  const cx = ((mouse.x + 1) / 2) * rect.width;
+  const cy = ((1 - mouse.y) / 2) * rect.height;
+  return Math.hypot(cx - bx, cy - by);
 }
 const startPoint = new THREE.Vector3();
 const aimPoint = new THREE.Vector3();
@@ -119,7 +165,7 @@ function updateBounciness() {
 }
 
 function updateTransparency() {
-  wallMat.opacity = 1 - transparencySlider.value / 100;
+  translucidMat.opacity = 1 - transparencySlider.value / 100;
   edges.material.opacity = 0.25 + 0.35 * (transparencySlider.value / 100);
   transparencyValue.textContent = transparencySlider.value + '%';
 }
@@ -127,6 +173,7 @@ function updateTransparency() {
 function updateBallColor() {
   const color = new THREE.Color().setHSL(ballColorSlider.value / 360, 1, 0.5);
   baseBallColor.copy(color);
+  floorMat.color.setHSL(((ballColorSlider.value + 180) % 360) / 360, 0.6, 0.35);
   const hex = '#' + color.getHexString();
   ballColorSlider.style.setProperty('--thumb-color', hex);
   ballColorValue.textContent = hex;
@@ -163,12 +210,13 @@ renderer.domElement.addEventListener('pointerdown', (event) => {
   if (event.button !== 0) return;
   updateMouse(event);
   raycaster.setFromCamera(mouse, camera);
-  const hits = raycaster.intersectObject(walls);
+  const hits = raycaster.intersectObjects(wallMeshes);
   if (!hits.length) return;
   controls.enabled = false;
   aiming = true;
-  faceNormal.copy(hits[0].face.normal).transformDirection(walls.matrixWorld);
-  pos.copy(hits[0].point).addScaledVector(faceNormal, -R);
+  faceNormal.copy(hits[0].face.normal).transformDirection(hits[0].object.matrixWorld);
+  if (faceNormal.dot(hits[0].point) > 0) faceNormal.negate();
+  pos.copy(hits[0].point).addScaledVector(faceNormal, R);
   startPoint.copy(pos);
   aimPoint.copy(pos);
   ball.position.copy(pos);
@@ -184,7 +232,18 @@ window.addEventListener('pointermove', (event) => {
   updateMouse(event);
   raycaster.setFromCamera(mouse, camera);
   const target = rayBoxTarget(raycaster.ray);
-  aimPoint.copy(target);
+  if (target) {
+    aimPoint.copy(target);
+    const dir = aimPoint.clone().sub(startPoint);
+    if (dir.lengthSq() > 1e-6) {
+      aimDirection.copy(dir.normalize());
+    }
+  } else if (aimDirection.lengthSq() > 1e-6) {
+    const worldLen = cursorPixelsFromBall() / pixelsPerWorldUnit();
+    aimPoint.copy(startPoint).addScaledVector(aimDirection, Math.max(worldLen, 0.1));
+  } else {
+    aimPoint.copy(startPoint);
+  }
   updateAimLine();
 });
 
@@ -262,6 +321,12 @@ for (const axis of ['x', 'y', 'z']) {
   }
 }
 
+function opacityOfWall(axis, value) {
+  if (axis === 'y') return value > 0 ? clearMat.opacity : 1;
+  if (axis === 'z') return value > 0 ? clearMat.opacity : translucidMat.opacity;
+  return translucidMat.opacity;
+}
+
 function wallDimmingFactor() {
   if (!ball.visible) return 1;
   camToBall.subVectors(ball.position, camera.position);
@@ -283,7 +348,7 @@ function wallDimmingFactor() {
       }
     }
     if (insideFace) {
-      factor = Math.min(factor, 1 - wallMat.opacity);
+      factor = Math.min(factor, 1 - opacityOfWall(plane.axis, plane.value));
     }
   }
   return factor;
