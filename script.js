@@ -108,6 +108,8 @@ const bouncinessSlider = document.getElementById('bounciness');
 const transparencySlider = document.getElementById('transparency');
 const bouncinessValue = document.getElementById('bounciness-value');
 const transparencyValue = document.getElementById('transparency-value');
+const ballColorSlider = document.getElementById('ball-color');
+const ballColorValue = document.getElementById('ball-color-value');
 const statusEl = document.getElementById('status');
 
 function updateBounciness() {
@@ -121,10 +123,20 @@ function updateTransparency() {
   transparencyValue.textContent = transparencySlider.value + '%';
 }
 
+function updateBallColor() {
+  const color = new THREE.Color().setHSL(ballColorSlider.value / 360, 1, 0.5);
+  ball.material.color.copy(color);
+  const hex = '#' + color.getHexString();
+  ballColorSlider.style.setProperty('--thumb-color', hex);
+  ballColorValue.textContent = hex;
+}
+
 bouncinessSlider.addEventListener('input', updateBounciness);
 transparencySlider.addEventListener('input', updateTransparency);
+ballColorSlider.addEventListener('input', updateBallColor);
 updateBounciness();
 updateTransparency();
+updateBallColor();
 
 document.getElementById('reset').addEventListener('click', resetBall);
 

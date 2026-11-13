@@ -68,6 +68,64 @@ canvas {
   accent-color: #5fb2ff;
 }
 
+#ui input[type="range"].color-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 18px;
+  background: transparent;
+}
+
+#ui input[type="range"].color-slider::-webkit-slider-runnable-track {
+  height: 10px;
+  border-radius: 5px;
+  background: linear-gradient(
+    to right,
+    #ff0000,
+    #ffff00,
+    #00ff00,
+    #00ffff,
+    #0000ff,
+    #ff00ff,
+    #ff0000
+  );
+}
+
+#ui input[type="range"].color-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  margin-top: -4px;
+  border-radius: 50%;
+  background: var(--thumb-color, #ff7a1a);
+  border: 2px solid #ffffff;
+  cursor: pointer;
+}
+
+#ui input[type="range"].color-slider::-moz-range-track {
+  height: 10px;
+  border-radius: 5px;
+  background: linear-gradient(
+    to right,
+    #ff0000,
+    #ffff00,
+    #00ff00,
+    #00ffff,
+    #0000ff,
+    #ff00ff,
+    #ff0000
+  );
+}
+
+#ui input[type="range"].color-slider::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--thumb-color, #ff7a1a);
+  border: 2px solid #ffffff;
+  cursor: pointer;
+}
+
 #ui button {
   width: 100%;
   padding: 7px 0;

@@ -75,6 +75,64 @@ canvas {
   accent-color: #5fb2ff;
 }
 
+#ui input[type="range"].color-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 18px;
+  background: transparent;
+}
+
+#ui input[type="range"].color-slider::-webkit-slider-runnable-track {
+  height: 10px;
+  border-radius: 5px;
+  background: linear-gradient(
+    to right,
+    #ff0000,
+    #ffff00,
+    #00ff00,
+    #00ffff,
+    #0000ff,
+    #ff00ff,
+    #ff0000
+  );
+}
+
+#ui input[type="range"].color-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  margin-top: -4px;
+  border-radius: 50%;
+  background: var(--thumb-color, #ff7a1a);
+  border: 2px solid #ffffff;
+  cursor: pointer;
+}
+
+#ui input[type="range"].color-slider::-moz-range-track {
+  height: 10px;
+  border-radius: 5px;
+  background: linear-gradient(
+    to right,
+    #ff0000,
+    #ffff00,
+    #00ff00,
+    #00ffff,
+    #0000ff,
+    #ff00ff,
+    #ff0000
+  );
+}
+
+#ui input[type="range"].color-slider::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--thumb-color, #ff7a1a);
+  border: 2px solid #ffffff;
+  cursor: pointer;
+}
+
 #ui button {
   width: 100%;
   padding: 7px 0;
@@ -110,6 +168,10 @@ canvas {
     <label>
       <span>Wall transparency <b id="transparency-value">85%</b></span>
       <input type="range" id="transparency" min="0" max="100" value="85" />
+    </label>
+    <label>
+      <span>Ball color <b id="ball-color-value">#ff7a1a</b></span>
+      <input type="range" id="ball-color" min="0" max="360" value="24" class="color-slider" />
     </label>
     <button id="reset">Reset ball</button>
     <p class="hint">
@@ -230,6 +292,8 @@ const bouncinessSlider = document.getElementById('bounciness');
 const transparencySlider = document.getElementById('transparency');
 const bouncinessValue = document.getElementById('bounciness-value');
 const transparencyValue = document.getElementById('transparency-value');
+const ballColorSlider = document.getElementById('ball-color');
+const ballColorValue = document.getElementById('ball-color-value');
 const statusEl = document.getElementById('status');
 
 function updateBounciness() {
@@ -243,10 +307,20 @@ function updateTransparency() {
   transparencyValue.textContent = transparencySlider.value + '%';
 }
 
+function updateBallColor() {
+  const color = new THREE.Color().setHSL(ballColorSlider.value / 360, 1, 0.5);
+  ball.material.color.copy(color);
+  const hex = '#' + color.getHexString();
+  ballColorSlider.style.setProperty('--thumb-color', hex);
+  ballColorValue.textContent = hex;
+}
+
 bouncinessSlider.addEventListener('input', updateBounciness);
 transparencySlider.addEventListener('input', updateTransparency);
+ballColorSlider.addEventListener('input', updateBallColor);
 updateBounciness();
 updateTransparency();
+updateBallColor();
 
 document.getElementById('reset').addEventListener('click', resetBall);
 
