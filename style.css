@@ -24,7 +24,10 @@ canvas {
   left: 50%;
   transform: translateX(-50%);
   display: flex;
-  gap: 28px;
+  flex-wrap: wrap;
+  justify-content: center;
+  max-width: 55vw;
+  gap: 12px 24px;
   padding: 10px 22px;
   background: rgba(15, 20, 30, 0.85);
   border: 1px solid rgba(120, 170, 255, 0.25);
@@ -176,6 +179,153 @@ canvas {
 
 #ui button:hover {
   background: rgba(95, 178, 255, 0.3);
+}
+
+#difficulty {
+  margin-bottom: 12px;
+}
+
+.diff-label {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 12px;
+}
+
+.diff-buttons {
+  display: flex;
+  gap: 6px;
+}
+
+.diff-buttons button {
+  width: auto;
+  flex: 1;
+  padding: 6px 0;
+  font-size: 11px;
+}
+
+.diff-buttons button.active {
+  background: rgba(95, 178, 255, 0.45);
+  border-color: #9fd8ff;
+  color: #ffffff;
+}
+
+#leaderboard {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  width: 230px;
+  padding: 12px 14px;
+  background: rgba(15, 20, 30, 0.85);
+  border: 1px solid rgba(120, 170, 255, 0.25);
+  border-radius: 10px;
+  backdrop-filter: blur(6px);
+  user-select: none;
+}
+
+#leaderboard h2 {
+  margin: 0 0 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #9fd8ff;
+}
+
+#leaderboard-rows {
+  max-height: 45vh;
+  overflow-y: auto;
+}
+
+.lb-row {
+  display: grid;
+  grid-template-columns: 26px 1fr 48px 62px;
+  gap: 4px;
+  align-items: baseline;
+  padding: 3px 2px;
+  font-size: 11px;
+  border-bottom: 1px solid rgba(120, 170, 255, 0.08);
+}
+
+.lb-rank {
+  color: #7d8b9c;
+}
+
+.lb-name {
+  color: #dfe8f2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lb-score {
+  text-align: right;
+  font-weight: 600;
+  color: #9fd8ff;
+}
+
+.lb-date {
+  text-align: right;
+  color: #7d8b9c;
+  font-size: 10px;
+}
+
+.lb-highlight {
+  background: rgba(95, 178, 255, 0.18);
+  border-radius: 4px;
+}
+
+.lb-empty {
+  font-size: 11px;
+  color: #7d8b9c;
+  padding: 4px 2px;
+}
+
+#modal-backdrop {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(5, 8, 14, 0.7);
+  z-index: 20;
+}
+
+#modal-backdrop[hidden] {
+  display: none;
+}
+
+#modal {
+  width: 280px;
+  padding: 20px 22px;
+  background: rgba(15, 20, 30, 0.97);
+  border: 1px solid rgba(120, 170, 255, 0.35);
+  border-radius: 10px;
+  text-align: center;
+}
+
+#modal h2 {
+  margin: 0 0 8px;
+  font-size: 15px;
+  color: #9fd8ff;
+}
+
+#modal p {
+  margin: 0 0 14px;
+  font-size: 13px;
+}
+
+#player-name {
+  width: 100%;
+  margin-bottom: 10px;
+  padding: 7px 9px;
+  font-size: 12px;
+  color: #dfe8f2;
+  background: rgba(10, 14, 22, 0.9);
+  border: 1px solid rgba(120, 170, 255, 0.35);
+  border-radius: 6px;
+  outline: none;
+}
+
+#player-name:focus {
+  border-color: #9fd8ff;
 }
 
 .hint {
