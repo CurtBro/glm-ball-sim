@@ -37,12 +37,12 @@ const sunLight = new THREE.DirectionalLight(0xffffff, 0.9);
 sunLight.position.set(0, HALF + CUBE * 0.1, 0);
 sunLight.castShadow = true;
 sunLight.shadow.mapSize.set(1024, 1024);
-sunLight.shadow.camera.left = -7;
-sunLight.shadow.camera.right = 7;
-sunLight.shadow.camera.top = 7;
-sunLight.shadow.camera.bottom = -7;
+sunLight.shadow.camera.left = -9;
+sunLight.shadow.camera.right = 9;
+sunLight.shadow.camera.top = 9;
+sunLight.shadow.camera.bottom = -9;
 sunLight.shadow.camera.near = 0.5;
-sunLight.shadow.camera.far = 30;
+sunLight.shadow.camera.far = 100;
 sunLight.shadow.camera.updateProjectionMatrix();
 sunLight.shadow.radius = 12;
 sunLight.shadow.blurSamples = 16;
@@ -317,6 +317,8 @@ function makeTargetTexture() {
   return new THREE.CanvasTexture(canvas);
 }
 const targetTexture = makeTargetTexture();
+const targetMat = new THREE.MeshBasicMaterial({ map: targetTexture });
+const targetBackMat = new THREE.MeshBasicMaterial({ color: 0x3a3f46, side: THREE.DoubleSide });
 
 function shuffle(arr) {
   for (let i = arr.length - 1; i > 0; i--) {
@@ -331,8 +333,8 @@ function shuffle(arr) {
 function spawnCircles() {
   for (const c of game.circles) {
     scene.remove(c.mesh);
+    scene.remove(c.backMesh);
     c.mesh.geometry.dispose();
-    c.mesh.material.dispose();
   }
   game.circles = [];
   const radius = R * DIFFICULTY_MULT[game.difficulty] * game.sizeMult;
@@ -359,15 +361,18 @@ function spawnCircles() {
     }
     const inward = new THREE.Vector3();
     inward[surf.axis] = -surf.sign;
-    const mesh = new THREE.Mesh(
-      new THREE.CircleGeometry(radius, 40),
-      new THREE.MeshBasicMaterial({ map: targetTexture })
-    );
+    const geo = new THREE.CircleGeometry(radius, 40);
+    const mesh = new THREE.Mesh(geo, targetMat);
     mesh.position.copy(center).addScaledVector(inward, 0.02);
     mesh.lookAt(mesh.position.clone().add(inward));
     scene.add(mesh);
+    const backMesh = new THREE.Mesh(geo, targetBackMat);
+    backMesh.position.copy(center).addScaledVector(inward, -0.02);
+    backMesh.lookAt(backMesh.position.clone().addScaledVector(inward, -1));
+    scene.add(backMesh);
     game.circles.push({
       mesh,
+      backMesh,
       center,
       radius,
       surfAxis: surf.axis,
@@ -381,8 +386,8 @@ function spawnCircles() {
 function popCircle(circle) {
   circle.alive = false;
   scene.remove(circle.mesh);
+  scene.remove(circle.backMesh);
   circle.mesh.geometry.dispose();
-  circle.mesh.material.dispose();
   playPop();
   spawnPopFlash(circle);
   const bonus = game.bounceCount === 3 ? 2 : 1;
@@ -585,24 +590,18 @@ document.querySelectorAll('#difficulty button').forEach((btn) => {
 const RESIZE_STEP = 1.25;
 const SIZE_MULT_MIN = 0.5;
 const SIZE_MULT_MAX = 3;
+const targetSizeValue = document.getElementById('target-size-value');
+
+document.getElementById('size-bigger').addEventListener('click', () => resizeTargets(RESIZE_STEP));
+document.getElementById('size-smaller').addEventListener('click', () => resizeTargets(1 / RESIZE_STEP));
 
 function resizeTargets(factor) {
   game.sizeMult = THREE.MathUtils.clamp(game.sizeMult * factor, SIZE_MULT_MIN, SIZE_MULT_MAX);
+  targetSizeValue.textContent = game.sizeMult.toFixed(2) + 'x';
   spawnCircles();
   updateScoreboard();
   setStatus('Target size ' + game.sizeMult.toFixed(2) + 'x - three new targets placed.');
 }
-
-window.addEventListener('keydown', (event) => {
-  if (!event.ctrlKey && !event.metaKey) return;
-  if (event.key === 'ArrowUp') {
-    event.preventDefault();
-    resizeTargets(RESIZE_STEP);
-  } else if (event.key === 'ArrowDown') {
-    event.preventDefault();
-    resizeTargets(1 / RESIZE_STEP);
-  }
-});
 
 newGame();
 renderLeaderboard();
@@ -691,9 +690,14 @@ function updateMouse(event) {
   mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
 }
 
+let downX = 0;
+let downY = 0;
+
 renderer.domElement.addEventListener('pointerdown', (event) => {
   if (event.button !== 0) return;
   ensureAudio();
+  downX = event.clientX;
+  downY = event.clientY;
   updateMouse(event);
   raycaster.setFromCamera(mouse, camera);
   const hits = raycaster.intersectObjects([grabSphere, lightGrab]);
@@ -734,7 +738,6 @@ window.addEventListener('pointermove', (event) => {
         p.x = THREE.MathUtils.clamp(p.x, -25, 25);
         p.z = THREE.MathUtils.clamp(p.z, -25, 25);
         sunLight.position.set(p.x, LIGHT_Y, p.z);
-        sunLight.target.position.set(p.x, 0, p.z);
         lightMarker.position.copy(sunLight.position);
         lightGrab.position.copy(lightMarker.position);
       }
@@ -760,14 +763,36 @@ window.addEventListener('pointermove', (event) => {
   updateCrosshair();
 });
 
-window.addEventListener('pointerup', () => {
+function recallBall() {
+  launched = false;
+  atRest = false;
+  restAt = 0;
+  pos.set(0, 0, 0);
+  vel.set(0, 0, 0);
+  ball.position.copy(pos);
+  if (game.attemptPops === 0 && game.lastSuccessPoints > 0) {
+    game.score -= game.lastSuccessPoints;
+    updateScoreboard();
+    setStatus('Ball recalled - ' + game.lastSuccessPoints + ' points deducted. Pull to launch.');
+  } else {
+    setStatus('Ball recalled to center. Pull to launch.');
+  }
+}
+
+window.addEventListener('pointerup', (event) => {
   if (draggingLight) {
     draggingLight = false;
     controls.enabled = true;
     setStatus('Light set. Pull from the ball to launch.');
     return;
   }
-  if (!aiming) return;
+  if (!aiming) {
+    const moved = Math.hypot(event.clientX - downX, event.clientY - downY);
+    if (moved < 6 && launched && !atRest && game.bounceCount >= 2) {
+      recallBall();
+    }
+    return;
+  }
   aiming = false;
   controls.enabled = true;
   aimLine.visible = false;
