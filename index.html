@@ -8,6 +8,8 @@
 </head>
 <body>
   <div id="legend">
+    <div class="legend-item"><span class="legend-label">Score</span><span class="legend-value" id="legend-score">0</span></div>
+    <div class="legend-item"><span class="legend-label">Targets</span><span class="legend-value" id="legend-targets">3</span></div>
     <div class="legend-item"><span class="legend-label">Force</span><span class="legend-value" id="legend-force">—</span></div>
     <div class="legend-item"><span class="legend-label">Floor angle</span><span class="legend-value" id="legend-floor">—</span></div>
     <div class="legend-item"><span class="legend-label">X angle</span><span class="legend-value" id="legend-x">—</span></div>
@@ -15,7 +17,7 @@
   </div>
   <div id="ui">
     <h1>Bouncing Ball in a Cube</h1>
-    <p id="status">Pull from the ball at the center, then release to launch.</p>
+    <p id="status">Pop all 3 targets! Pull from the ball and hit them on your 2nd or 3rd wall bounce.</p>
     <label>
       <span>Bounciness <b id="bounciness-value">90%</b></span>
       <input type="range" id="bounciness" min="0" max="100" value="90" />
@@ -32,11 +34,33 @@
       <span>Volume <b id="volume-value">70%</b></span>
       <input type="range" id="volume" min="0" max="100" value="70" />
     </label>
-    <button id="reset">Reset ball</button>
+    <div id="difficulty">
+      <span class="diff-label">Difficulty</span>
+      <div class="diff-buttons">
+        <button data-diff="easy">Easy</button>
+        <button data-diff="medium" class="active">Medium</button>
+        <button data-diff="hard">Hard</button>
+      </div>
+    </div>
+    <button id="reset">Reset ball &amp; light</button>
     <p class="hint">
       Pull from the ball at the center of the cube: stretch the line and release to launch (longer pull = more force).<br />
+      Targets pop only on your 2nd or 3rd wall bounce (floor counts too). Miss and you lose the points of your last successful hit.<br />
+      Grab the glowing light bulb above the cube (when the ball is not in play) and drag it around - it stays where you leave it. Reset restores it above the center.<br />
       Drag empty space: orbit the camera. Scroll: zoom. After resting, the ball returns to the center.
     </p>
+  </div>
+  <div id="leaderboard">
+    <h2>Leaderboard</h2>
+    <div id="leaderboard-rows"></div>
+  </div>
+  <div id="modal-backdrop" hidden>
+    <div id="modal">
+      <h2>All targets popped!</h2>
+      <p>Final score: <b id="final-score">0</b></p>
+      <input id="player-name" maxlength="24" placeholder="Your name" autocomplete="off" />
+      <button id="save-score">Save score</button>
+    </div>
   </div>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>

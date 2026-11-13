@@ -153,6 +153,7 @@ let restAt = 0;
 let restitution = 0.9;
 
 let aiming = false;
+let draggingLight = false;
 const raycaster = new THREE.Raycaster();
 const mouse = new THREE.Vector2();
 const cubeBox = new THREE.Box3(
@@ -220,6 +221,8 @@ const legendY = document.getElementById('legend-y');
 const statusEl = document.getElementById('status');
 const volumeSlider = document.getElementById('volume');
 const volumeValue = document.getElementById('volume-value');
+const legendScore = document.getElementById('legend-score');
+const legendTargets = document.getElementById('legend-targets');
 
 const BALL_MASS = 0.45;
 
@@ -270,6 +273,317 @@ function playDook(impactSpeed) {
   osc.stop(t + 0.14);
 }
 
+const LB_KEY = 'glm-ball-sim-leaderboard';
+const DIFFICULTY_MULT = { easy: 3, medium: 2, hard: 1 };
+const LIGHT_Y = HALF + CUBE * 0.1;
+const popFlashes = [];
+const game = {
+  difficulty: 'medium',
+  circles: [],
+  bounceCount: 0,
+  pathLength: 0,
+  attemptPops: 0,
+  lastSuccessPoints: 0,
+  score: 0
+};
+
+const lightGrab = new THREE.Mesh(
+  new THREE.SphereGeometry(0.7, 12, 8),
+  new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false })
+);
+lightGrab.position.copy(lightMarker.position);
+scene.add(lightGrab);
+
+function makeTargetTexture() {
+  const canvas = document.createElement('canvas');
+  canvas.width = 256;
+  canvas.height = 256;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#d94040';
+  ctx.fillRect(0, 0, 256, 256);
+  ctx.fillStyle = '#ffffff';
+  ctx.beginPath();
+  ctx.arc(128, 128, 92, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#d94040';
+  ctx.beginPath();
+  ctx.arc(128, 128, 58, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#ffffff';
+  ctx.beginPath();
+  ctx.arc(128, 128, 22, 0, Math.PI * 2);
+  ctx.fill();
+  return new THREE.CanvasTexture(canvas);
+}
+const targetTexture = makeTargetTexture();
+
+function shuffle(arr) {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    const tmp = arr[i];
+    arr[i] = arr[j];
+    arr[j] = tmp;
+  }
+  return arr;
+}
+
+function spawnCircles() {
+  for (const c of game.circles) {
+    scene.remove(c.mesh);
+    c.mesh.geometry.dispose();
+    c.mesh.material.dispose();
+  }
+  game.circles = [];
+  const radius = R * DIFFICULTY_MULT[game.difficulty];
+  const margin = radius + 0.4;
+  const surfaces = [
+    { axis: 'x', sign: -1 },
+    { axis: 'x', sign: 1 },
+    { axis: 'y', sign: 1 },
+    { axis: 'z', sign: -1 },
+    { axis: 'z', sign: 1 }
+  ];
+  shuffle(surfaces);
+  const chosen = surfaces.slice(0, 3);
+  for (const surf of chosen) {
+    const u = (Math.random() * 2 - 1) * (HALF - margin);
+    const v = (Math.random() * 2 - 1) * (HALF - margin);
+    const center = new THREE.Vector3();
+    if (surf.axis === 'x') {
+      center.set(surf.sign * HALF, u, v);
+    } else if (surf.axis === 'y') {
+      center.set(u, surf.sign * HALF, v);
+    } else {
+      center.set(u, v, surf.sign * HALF);
+    }
+    const inward = new THREE.Vector3();
+    inward[surf.axis] = -surf.sign;
+    const mesh = new THREE.Mesh(
+      new THREE.CircleGeometry(radius, 40),
+      new THREE.MeshBasicMaterial({ map: targetTexture })
+    );
+    mesh.position.copy(center).addScaledVector(inward, 0.02);
+    mesh.lookAt(mesh.position.clone().add(inward));
+    scene.add(mesh);
+    game.circles.push({
+      mesh,
+      center,
+      radius,
+      surfAxis: surf.axis,
+      surfSign: surf.sign,
+      inward,
+      alive: true
+    });
+  }
+}
+
+function popCircle(circle) {
+  circle.alive = false;
+  scene.remove(circle.mesh);
+  circle.mesh.geometry.dispose();
+  circle.mesh.material.dispose();
+  playPop();
+  spawnPopFlash(circle);
+  const bonus = game.bounceCount === 3 ? 2 : 1;
+  const pts = Math.round(game.pathLength * bonus);
+  game.score += pts;
+  game.lastSuccessPoints = pts;
+  game.attemptPops += 1;
+  updateScoreboard();
+  const remaining = game.circles.filter((c) => c.alive).length;
+  if (remaining === 0) {
+    setStatus('Target popped! +' + pts + ' points. All targets down!');
+    endGame();
+  } else {
+    setStatus('Target popped! +' + pts + ' points (' + game.bounceCount + ' bounces). ' + remaining + ' to go.');
+  }
+}
+
+function checkCircleHit(contact) {
+  for (const c of game.circles) {
+    if (!c.alive) continue;
+    if (c.surfAxis !== contact.axis || c.surfSign !== contact.sign) continue;
+    let dist;
+    if (contact.axis === 'x') {
+      dist = Math.hypot(pos.y - c.center.y, pos.z - c.center.z);
+    } else if (contact.axis === 'y') {
+      dist = Math.hypot(pos.x - c.center.x, pos.z - c.center.z);
+    } else {
+      dist = Math.hypot(pos.x - c.center.x, pos.y - c.center.y);
+    }
+    if (dist <= c.radius) {
+      popCircle(c);
+      break;
+    }
+  }
+}
+
+function spawnPopFlash(circle) {
+  const mesh = new THREE.Mesh(
+    new THREE.RingGeometry(circle.radius * 0.85, circle.radius, 40),
+    new THREE.MeshBasicMaterial({
+      color: 0xffffff,
+      transparent: true,
+      opacity: 0.9,
+      side: THREE.DoubleSide,
+      depthWrite: false
+    })
+  );
+  mesh.position.copy(circle.mesh.position);
+  mesh.quaternion.copy(circle.mesh.quaternion);
+  scene.add(mesh);
+  popFlashes.push({ mesh, age: 0 });
+}
+
+function playPop() {
+  if (!audioCtx || !masterGain || Number(volumeSlider.value) === 0) return;
+  const len = Math.floor(audioCtx.sampleRate * 0.12);
+  const buffer = audioCtx.createBuffer(1, len, audioCtx.sampleRate);
+  const data = buffer.getChannelData(0);
+  for (let i = 0; i < len; i++) {
+    data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 2);
+  }
+  const src = audioCtx.createBufferSource();
+  src.buffer = buffer;
+  const filter = audioCtx.createBiquadFilter();
+  filter.type = 'bandpass';
+  filter.frequency.value = 900;
+  filter.Q.value = 0.8;
+  const gain = audioCtx.createGain();
+  const t = audioCtx.currentTime;
+  gain.gain.setValueAtTime(1.2, t);
+  gain.gain.exponentialRampToValueAtTime(0.001, t + 0.12);
+  src.connect(filter);
+  filter.connect(gain);
+  gain.connect(masterGain);
+  src.start(t);
+}
+
+function updateScoreboard() {
+  legendScore.textContent = String(game.score);
+  const remaining = game.circles.filter((c) => c.alive).length;
+  legendTargets.textContent = String(remaining);
+}
+
+function endGame() {
+  finalScoreEl.textContent = String(game.score);
+  modalBackdrop.hidden = false;
+  playerNameInput.value = '';
+  playerNameInput.focus();
+}
+
+function newGame() {
+  game.score = 0;
+  game.lastSuccessPoints = 0;
+  game.bounceCount = 0;
+  game.pathLength = 0;
+  game.attemptPops = 0;
+  spawnCircles();
+  resetBall();
+  updateScoreboard();
+}
+
+function resetLight() {
+  sunLight.position.set(0, LIGHT_Y, 0);
+  sunLight.target.position.set(0, 0, 0);
+  lightMarker.position.copy(sunLight.position);
+  lightGrab.position.copy(lightMarker.position);
+}
+
+function loadLeaderboard() {
+  try {
+    const raw = localStorage.getItem(LB_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (err) {
+    return [];
+  }
+}
+
+function saveLeaderboard(entries) {
+  try {
+    localStorage.setItem(LB_KEY, JSON.stringify(entries));
+  } catch (err) {
+    /* storage unavailable */
+  }
+}
+
+function addLeaderboardEntry(name, score) {
+  const entries = loadLeaderboard();
+  const entry = { name, score, date: new Date().toISOString().slice(0, 10) };
+  entries.push(entry);
+  entries.sort((a, b) => b.score - a.score);
+  const trimmed = entries.slice(0, 50);
+  saveLeaderboard(trimmed);
+  return entry;
+}
+
+function renderLeaderboard(highlight) {
+  const entries = loadLeaderboard();
+  if (!entries.length) {
+    leaderboardRows.innerHTML = '<div class="lb-empty">No scores yet - finish a round!</div>';
+    return;
+  }
+  leaderboardRows.innerHTML = '';
+  entries.forEach((entry, i) => {
+    const row = document.createElement('div');
+    row.className = 'lb-row' + (highlight && entry === highlight ? ' lb-highlight' : '');
+    const rank = document.createElement('span');
+    rank.className = 'lb-rank';
+    rank.textContent = String(i + 1) + '.';
+    const name = document.createElement('span');
+    name.className = 'lb-name';
+    name.textContent = entry.name;
+    const score = document.createElement('span');
+    score.className = 'lb-score';
+    score.textContent = String(entry.score);
+    const date = document.createElement('span');
+    date.className = 'lb-date';
+    date.textContent = entry.date;
+    row.appendChild(rank);
+    row.appendChild(name);
+    row.appendChild(score);
+    row.appendChild(date);
+    leaderboardRows.appendChild(row);
+  });
+}
+
+function saveScore() {
+  const name = playerNameInput.value.trim() || 'Anonymous';
+  const entry = addLeaderboardEntry(name, game.score);
+  renderLeaderboard(entry);
+  modalBackdrop.hidden = true;
+  newGame();
+  setStatus('New targets placed - go again!');
+}
+
+const modalBackdrop = document.getElementById('modal-backdrop');
+const finalScoreEl = document.getElementById('final-score');
+const playerNameInput = document.getElementById('player-name');
+const saveScoreBtn = document.getElementById('save-score');
+const leaderboardRows = document.getElementById('leaderboard-rows');
+
+saveScoreBtn.addEventListener('click', saveScore);
+playerNameInput.addEventListener('keydown', (event) => {
+  if (event.key === 'Enter') {
+    saveScore();
+  }
+});
+
+document.querySelectorAll('#difficulty button').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    game.difficulty = btn.dataset.diff;
+    document.querySelectorAll('#difficulty button').forEach((b) => b.classList.remove('active'));
+    btn.classList.add('active');
+    newGame();
+    setStatus('Difficulty: ' + btn.textContent + '. New targets placed.');
+  });
+});
+
+newGame();
+renderLeaderboard();
+
 function updateBounciness() {
   restitution = bouncinessSlider.value / 100;
   bouncinessValue.textContent = bouncinessSlider.value + '%';
@@ -299,7 +613,11 @@ updateTransparency();
 updateBallColor();
 updateVolume();
 
-document.getElementById('reset').addEventListener('click', resetBall);
+document.getElementById('reset').addEventListener('click', () => {
+  resetBall();
+  resetLight();
+  setStatus('Ball and light reset. Pull from the ball to launch.');
+});
 
 function resetBall() {
   launched = false;
@@ -355,7 +673,15 @@ renderer.domElement.addEventListener('pointerdown', (event) => {
   ensureAudio();
   updateMouse(event);
   raycaster.setFromCamera(mouse, camera);
-  if (!raycaster.intersectObject(grabSphere).length) return;
+  const hits = raycaster.intersectObjects([grabSphere, lightGrab]);
+  if (hits.length && hits[0].object === lightGrab) {
+    if (launched && !atRest) return;
+    draggingLight = true;
+    controls.enabled = false;
+    setStatus('Drag the light anywhere over the floor plan, then release.');
+    return;
+  }
+  if (!hits.length || hits[0].object !== grabSphere) return;
   controls.enabled = false;
   aiming = true;
   pos.set(0, 0, 0);
@@ -374,8 +700,30 @@ renderer.domElement.addEventListener('pointerdown', (event) => {
 });
 
 window.addEventListener('pointermove', (event) => {
-  if (!aiming) return;
   updateMouse(event);
+  if (draggingLight) {
+    raycaster.setFromCamera(mouse, camera);
+    const dir = raycaster.ray.direction;
+    if (Math.abs(dir.y) > 1e-4) {
+      const t = (LIGHT_Y - raycaster.ray.origin.y) / dir.y;
+      if (t > 0) {
+        const p = raycaster.ray.origin.clone().addScaledVector(dir, t);
+        p.x = THREE.MathUtils.clamp(p.x, -25, 25);
+        p.z = THREE.MathUtils.clamp(p.z, -25, 25);
+        sunLight.position.set(p.x, LIGHT_Y, p.z);
+        sunLight.target.position.set(p.x, 0, p.z);
+        lightMarker.position.copy(sunLight.position);
+        lightGrab.position.copy(lightMarker.position);
+      }
+    }
+    return;
+  }
+  if (!aiming) {
+    raycaster.setFromCamera(mouse, camera);
+    const hover = raycaster.intersectObjects([grabSphere, lightGrab]);
+    renderer.domElement.style.cursor = hover.length ? 'grab' : 'default';
+    return;
+  }
   raycaster.setFromCamera(mouse, camera);
   const target = rayBoxTarget(raycaster.ray);
   if (target) {
@@ -390,6 +738,12 @@ window.addEventListener('pointermove', (event) => {
 });
 
 window.addEventListener('pointerup', () => {
+  if (draggingLight) {
+    draggingLight = false;
+    controls.enabled = true;
+    setStatus('Light set. Pull from the ball to launch.');
+    return;
+  }
   if (!aiming) return;
   aiming = false;
   controls.enabled = true;
@@ -404,6 +758,9 @@ window.addEventListener('pointerup', () => {
     const speed = Math.min(length * 3, MAX_SPEED);
     vel.copy(drag.normalize().multiplyScalar(speed));
     launched = true;
+    game.bounceCount = 0;
+    game.pathLength = 0;
+    game.attemptPops = 0;
     setStatus('Ball in flight.');
   }
 });
@@ -428,28 +785,35 @@ function updateAimLine() {
 function step(h) {
   vel.y -= G * h;
   pos.addScaledVector(vel, h);
+  game.pathLength += vel.length() * h;
   const lim = HALF - R;
-  let bounced = false;
+  const contacts = [];
   for (const axis of ['x', 'y', 'z']) {
     if (pos[axis] > lim) {
       pos[axis] = lim;
       if (vel[axis] > 0) {
         playDook(vel[axis]);
         vel[axis] = -vel[axis] * restitution;
-        bounced = true;
+        contacts.push({ axis, sign: 1 });
       }
     } else if (pos[axis] < -lim) {
       pos[axis] = -lim;
       if (vel[axis] < 0) {
         playDook(-vel[axis]);
         vel[axis] = -vel[axis] * restitution;
-        bounced = true;
+        contacts.push({ axis, sign: -1 });
       }
     }
   }
-  if (bounced) {
+  if (contacts.length) {
     vel.x *= BOUNCE_TANGENT_LOSS;
     vel.z *= BOUNCE_TANGENT_LOSS;
+    game.bounceCount += 1;
+    if (game.bounceCount >= 2 && game.bounceCount <= 3) {
+      for (const contact of contacts) {
+        checkCircleHit(contact);
+      }
+    }
   }
   if (pos.y <= -lim + 1e-4) {
     const friction = Math.max(0, 1 - FLOOR_FRICTION * h);
@@ -460,7 +824,13 @@ function step(h) {
       pos.y = -lim;
       if (!atRest) {
         atRest = true;
-        setStatus('Ball at rest. Drag on any wall to launch again.');
+        if (game.attemptPops === 0 && game.lastSuccessPoints > 0) {
+          game.score -= game.lastSuccessPoints;
+          updateScoreboard();
+          setStatus('No target hit - ' + game.lastSuccessPoints + ' points deducted.');
+        } else if (game.attemptPops === 0) {
+          setStatus('Ball at rest - returning to center.');
+        }
       }
     }
   }
@@ -575,6 +945,21 @@ function animate(now) {
     }
   }
   grabSphere.position.copy(ball.position);
+  lightGrab.position.copy(lightMarker.position);
+  for (let i = popFlashes.length - 1; i >= 0; i--) {
+    const flash = popFlashes[i];
+    flash.age += dt;
+    if (flash.age >= 0.35) {
+      scene.remove(flash.mesh);
+      flash.mesh.geometry.dispose();
+      flash.mesh.material.dispose();
+      popFlashes.splice(i, 1);
+    } else {
+      const s = 1 + (flash.age / 0.35) * 5;
+      flash.mesh.scale.set(s, s, 1);
+      flash.mesh.material.opacity = 0.9 * (1 - flash.age / 0.35);
+    }
+  }
   if (atRest) {
     if (!restAt) {
       restAt = now;
