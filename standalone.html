@@ -270,11 +270,12 @@ ball.visible = false;
 scene.add(ball);
 const baseBallColor = new THREE.Color(0xff7a1a);
 
-const aimLineGeo = new THREE.BufferGeometry().setFromPoints([
-  new THREE.Vector3(),
-  new THREE.Vector3()
-]);
-const aimLine = new THREE.Line(aimLineGeo, new THREE.LineBasicMaterial({ color: 0x39ff88 }));
+const aimLineGeo = new THREE.CylinderGeometry(0.07, 0.07, 1, 12, 1, true);
+aimLineGeo.translate(0, 0.5, 0);
+const aimLine = new THREE.Mesh(
+  aimLineGeo,
+  new THREE.MeshBasicMaterial({ color: 0xff7a1a })
+);
 aimLine.visible = false;
 scene.add(aimLine);
 
@@ -314,26 +315,9 @@ function rayBoxTarget(ray) {
   return null;
 }
 
-const aimDirection = new THREE.Vector3();
-const projectedBall = new THREE.Vector3();
-
-function pixelsPerWorldUnit() {
-  const dist = camera.position.distanceTo(startPoint);
-  const fovRad = (camera.fov * Math.PI) / 180;
-  return renderer.domElement.clientHeight / (2 * dist * Math.tan(fovRad / 2));
-}
-
-function cursorPixelsFromBall() {
-  projectedBall.copy(startPoint).project(camera);
-  const rect = renderer.domElement.getBoundingClientRect();
-  const bx = ((projectedBall.x + 1) / 2) * rect.width;
-  const by = ((1 - projectedBall.y) / 2) * rect.height;
-  const cx = ((mouse.x + 1) / 2) * rect.width;
-  const cy = ((1 - mouse.y) / 2) * rect.height;
-  return Math.hypot(cx - bx, cy - by);
-}
 const startPoint = new THREE.Vector3();
 const aimPoint = new THREE.Vector3();
+const tmpAim = new THREE.Vector3();
 
 const bouncinessSlider = document.getElementById('bounciness');
 const transparencySlider = document.getElementById('transparency');
@@ -418,15 +402,9 @@ window.addEventListener('pointermove', (event) => {
   const target = rayBoxTarget(raycaster.ray);
   if (target) {
     aimPoint.copy(target);
-    const dir = aimPoint.clone().sub(startPoint);
-    if (dir.lengthSq() > 1e-6) {
-      aimDirection.copy(dir.normalize());
-    }
-  } else if (aimDirection.lengthSq() > 1e-6) {
-    const worldLen = cursorPixelsFromBall() / pixelsPerWorldUnit();
-    aimPoint.copy(startPoint).addScaledVector(aimDirection, Math.max(worldLen, 0.1));
   } else {
-    aimPoint.copy(startPoint);
+    const t = raycaster.ray.direction.dot(tmpAim.subVectors(startPoint, raycaster.ray.origin));
+    aimPoint.copy(raycaster.ray.origin).addScaledVector(raycaster.ray.direction, Math.max(t, 0.1));
   }
   updateAimLine();
 });
@@ -448,11 +426,20 @@ window.addEventListener('pointerup', () => {
   setStatus('Ball in flight.');
 });
 
+const aimUp = new THREE.Vector3(0, 1, 0);
+const aimDir = new THREE.Vector3();
+
 function updateAimLine() {
-  const positions = aimLine.geometry.attributes.position;
-  positions.setXYZ(0, startPoint.x, startPoint.y, startPoint.z);
-  positions.setXYZ(1, aimPoint.x, aimPoint.y, aimPoint.z);
-  positions.needsUpdate = true;
+  aimDir.subVectors(aimPoint, startPoint);
+  const len = aimDir.length();
+  if (len < 1e-4) {
+    aimLine.visible = false;
+    return;
+  }
+  aimLine.position.copy(startPoint);
+  aimLine.scale.set(1, len, 1);
+  aimLine.quaternion.setFromUnitVectors(aimUp, aimDir.normalize());
+  aimLine.material.color.copy(baseBallColor);
   aimLine.visible = true;
 }
 
