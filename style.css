@@ -18,6 +18,43 @@ canvas {
   display: block;
 }
 
+#legend {
+  position: absolute;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 28px;
+  padding: 10px 22px;
+  background: rgba(15, 20, 30, 0.85);
+  border: 1px solid rgba(120, 170, 255, 0.25);
+  border-radius: 10px;
+  backdrop-filter: blur(6px);
+  user-select: none;
+}
+
+.legend-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.legend-label {
+  font-size: 10px;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: #7d8b9c;
+}
+
+.legend-value {
+  min-width: 76px;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 600;
+  color: #9fd8ff;
+}
+
 #ui {
   position: absolute;
   top: 16px;

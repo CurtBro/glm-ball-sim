@@ -97,8 +97,12 @@ scene.add(aimLine);
 
 const pos = new THREE.Vector3();
 const vel = new THREE.Vector3();
+const savedPos = new THREE.Vector3();
+const savedVel = new THREE.Vector3();
 let launched = false;
 let atRest = false;
+let savedLaunched = false;
+let savedAtRest = false;
 let restitution = 0.75;
 
 let aiming = false;
@@ -135,13 +139,35 @@ const startPoint = new THREE.Vector3();
 const aimPoint = new THREE.Vector3();
 const tmpAim = new THREE.Vector3();
 
+const crossMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+const crossArmGeo = new THREE.BoxGeometry(1.0, 0.05, 0.02);
+const crossArmH = new THREE.Mesh(crossArmGeo, crossMat);
+const crossArmV = new THREE.Mesh(crossArmGeo, crossMat);
+crossArmV.rotation.z = Math.PI / 2;
+const crosshair = new THREE.Group();
+crosshair.add(crossArmH);
+crosshair.add(crossArmV);
+crosshair.visible = false;
+scene.add(crosshair);
+
+const predictPos = new THREE.Vector3();
+const predictVel = new THREE.Vector3();
+const crossNormal = new THREE.Vector3();
+const crossAxis = new THREE.Vector3(0, 0, 1);
+
 const bouncinessSlider = document.getElementById('bounciness');
 const transparencySlider = document.getElementById('transparency');
 const bouncinessValue = document.getElementById('bounciness-value');
 const transparencyValue = document.getElementById('transparency-value');
 const ballColorSlider = document.getElementById('ball-color');
 const ballColorValue = document.getElementById('ball-color-value');
+const legendForce = document.getElementById('legend-force');
+const legendFloor = document.getElementById('legend-floor');
+const legendX = document.getElementById('legend-x');
+const legendY = document.getElementById('legend-y');
 const statusEl = document.getElementById('status');
+
+const BALL_MASS = 0.45;
 
 function updateBounciness() {
   restitution = bouncinessSlider.value / 100;
@@ -177,7 +203,34 @@ function resetBall() {
   atRest = false;
   ball.visible = false;
   aimLine.visible = false;
+  crosshair.visible = false;
+  setLegendIdle();
   setStatus('Drag on any wall to place the ball and aim.');
+}
+
+function setLegendIdle() {
+  legendForce.textContent = '—';
+  legendFloor.textContent = '—';
+  legendX.textContent = '—';
+  legendY.textContent = '—';
+}
+
+function updateLegend() {
+  const drag = tmpAim.subVectors(aimPoint, startPoint);
+  const length = drag.length();
+  if (length < 0.15) {
+    setLegendIdle();
+    return;
+  }
+  const speed = Math.min(length * 3, MAX_SPEED);
+  const force = 0.5 * BALL_MASS * speed * speed;
+  const floorAngle = (Math.atan2(drag.y, Math.hypot(drag.x, drag.z)) * 180) / Math.PI;
+  const xAngle = (Math.atan2(Math.abs(drag.x), Math.abs(drag.z)) * 180) / Math.PI;
+  const yAngle = (Math.atan2(Math.abs(drag.y), Math.abs(drag.z)) * 180) / Math.PI;
+  legendForce.textContent = force.toFixed(1) + ' N·m';
+  legendFloor.textContent = floorAngle.toFixed(1) + '°';
+  legendX.textContent = xAngle.toFixed(1) + '°';
+  legendY.textContent = yAngle.toFixed(1) + '°';
 }
 
 function setStatus(text) {
@@ -198,6 +251,10 @@ renderer.domElement.addEventListener('pointerdown', (event) => {
   if (!hits.length) return;
   controls.enabled = false;
   aiming = true;
+  savedLaunched = launched;
+  savedAtRest = atRest;
+  savedPos.copy(pos);
+  savedVel.copy(vel);
   faceNormal.copy(hits[0].face.normal).transformDirection(hits[0].object.matrixWorld);
   if (faceNormal.dot(hits[0].point) > 0) faceNormal.negate();
   pos.copy(hits[0].point).addScaledVector(faceNormal, R);
@@ -223,6 +280,8 @@ window.addEventListener('pointermove', (event) => {
     aimPoint.copy(raycaster.ray.origin).addScaledVector(raycaster.ray.direction, Math.max(t, 0.1));
   }
   updateAimLine();
+  updateLegend();
+  updateCrosshair();
 });
 
 window.addEventListener('pointerup', () => {
@@ -230,16 +289,28 @@ window.addEventListener('pointerup', () => {
   aiming = false;
   controls.enabled = true;
   aimLine.visible = false;
+  crosshair.visible = false;
   const drag = aimPoint.clone().sub(startPoint);
   const length = drag.length();
   if (length < 0.15) {
-    vel.set(0, 0, 0);
+    if (savedLaunched && !savedAtRest) {
+      pos.copy(savedPos);
+      vel.copy(savedVel);
+      ball.position.copy(pos);
+      launched = true;
+      atRest = false;
+      setStatus('Click ignored - ball keeps its flight. Drag to re-aim.');
+    } else {
+      vel.set(0, 0, 0);
+      launched = true;
+      setStatus('Ball placed.');
+    }
   } else {
     const speed = Math.min(length * 3, MAX_SPEED);
     vel.copy(drag.normalize().multiplyScalar(speed));
+    launched = true;
+    setStatus('Ball in flight.');
   }
-  launched = true;
-  setStatus('Ball in flight.');
 });
 
 const aimUp = new THREE.Vector3(0, 1, 0);
@@ -341,6 +412,50 @@ function wallDimmingFactor() {
   return factor;
 }
 
+function predictFirstHit() {
+  const drag = tmpAim.subVectors(aimPoint, startPoint);
+  const length = drag.length();
+  predictPos.copy(pos);
+  if (length < 0.15) {
+    predictVel.set(0, 0, 0);
+  } else {
+    predictVel.copy(drag).multiplyScalar(Math.min(length * 3, MAX_SPEED) / length);
+  }
+  const lim = HALF - R;
+  const h = 1 / 240;
+  for (let i = 0; i < 2400; i++) {
+    predictVel.y -= G * h;
+    predictPos.addScaledVector(predictVel, h);
+    for (const axis of ['x', 'y', 'z']) {
+      if (predictPos[axis] > lim) {
+        predictPos[axis] = HALF;
+        return { axis, sign: 1 };
+      }
+      if (predictPos[axis] < -lim) {
+        predictPos[axis] = -HALF;
+        return { axis, sign: -1 };
+      }
+    }
+  }
+  return null;
+}
+
+function updateCrosshair() {
+  const hit = predictFirstHit();
+  if (!hit) {
+    crosshair.visible = false;
+    return;
+  }
+  crossNormal.set(0, 0, 0);
+  crossNormal[hit.axis] = -hit.sign;
+  crosshair.position.copy(predictPos).addScaledVector(crossNormal, 0.03);
+  crosshair.quaternion.setFromUnitVectors(crossAxis, crossNormal);
+  crossMat.color.copy(baseBallColor);
+  crosshair.visible = true;
+}
+
+let dimFactor = 1;
+
 let last = performance.now();
 function animate(now) {
   requestAnimationFrame(animate);
@@ -354,7 +469,9 @@ function animate(now) {
       step(h);
     }
   }
-  ball.material.color.copy(baseBallColor).multiplyScalar(wallDimmingFactor());
+  const dimTarget = wallDimmingFactor();
+  dimFactor += (dimTarget - dimFactor) * Math.min(1, dt * 8);
+  ball.material.color.copy(baseBallColor).multiplyScalar(dimFactor);
   controls.update();
   renderer.render(scene, camera);
 }
