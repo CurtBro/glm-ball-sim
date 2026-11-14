@@ -275,6 +275,7 @@ function playDook(impactSpeed) {
 
 const LB_KEY = 'glm-ball-sim-leaderboard';
 const DIFFICULTY_MULT = { easy: 3, medium: 2, hard: 1.5 };
+const DIFFICULTY_SCORE_MULT = { easy: 1, medium: 2, hard: 3 };
 const LIGHT_Y = HALF + CUBE * 0.1;
 const popFlashes = [];
 const game = {
@@ -391,7 +392,7 @@ function popCircle(circle) {
   playPop();
   spawnPopFlash(circle);
   const bonus = game.bounceCount === 3 ? 2 : 1;
-  const pts = Math.round(game.pathLength * bonus);
+  const pts = Math.round(game.pathLength * bonus * DIFFICULTY_SCORE_MULT[game.difficulty]);
   game.score += pts;
   game.lastSuccessPoints = pts;
   game.attemptPops += 1;
@@ -771,9 +772,10 @@ function recallBall() {
   vel.set(0, 0, 0);
   ball.position.copy(pos);
   if (game.attemptPops === 0 && game.lastSuccessPoints > 0) {
-    game.score -= game.lastSuccessPoints;
+    const penalty = Math.round(game.lastSuccessPoints / 4);
+    game.score -= penalty;
     updateScoreboard();
-    setStatus('Ball recalled - ' + game.lastSuccessPoints + ' points deducted. Pull to launch.');
+    setStatus('Ball recalled - ' + penalty + ' points deducted. Pull to launch.');
   } else {
     setStatus('Ball recalled to center. Pull to launch.');
   }
@@ -873,9 +875,10 @@ function step(h) {
       if (!atRest) {
         atRest = true;
         if (game.attemptPops === 0 && game.lastSuccessPoints > 0) {
-          game.score -= game.lastSuccessPoints;
+          const penalty = Math.round(game.lastSuccessPoints / 4);
+          game.score -= penalty;
           updateScoreboard();
-          setStatus('No target hit - ' + game.lastSuccessPoints + ' points deducted.');
+          setStatus('No target hit - ' + penalty + ' points deducted.');
         } else if (game.attemptPops === 0) {
           setStatus('Ball at rest - returning to center.');
         }
